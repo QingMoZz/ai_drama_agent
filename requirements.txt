@@ -1,0 +1,5 @@
+langchain
+langgraph
+langchain-deepseek
+pydantic>=2,<3
+python-dotenv>=1,<2
