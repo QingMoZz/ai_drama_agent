@@ -14,6 +14,11 @@ from agent.storyboard_schema import (
     finalize_storyboard,
 )
 
+# 各节点每次调用的生成预算（输出 Token 上限），实际用量仍以模型返回的用量为准。
+STORY_MAX_TOKENS = 1024
+SCRIPT_MAX_TOKENS = 4096
+STORYBOARD_MAX_TOKENS = 4096
+
 SYSTEM_PROMPT = "你是一名擅长创作悬疑故事的漫剧编剧，你需要使用中文交流。"
 
 SCRIPT_SYSTEM_PROMPT = (
@@ -80,7 +85,7 @@ def generate_story(
         HumanMessage(content=state["requirement"]),
     ]
 
-    response = model.invoke(messages)
+    response = model.invoke(messages, max_tokens=STORY_MAX_TOKENS)
 
     finish_reason = response.response_metadata.get("finish_reason")
     if finish_reason == "length":
@@ -131,6 +136,7 @@ def generate_script(
         EpisodeScript,
         method="function_calling",
         include_raw=True,
+        max_tokens=SCRIPT_MAX_TOKENS,
     )
     result = structured_model.invoke(messages)
 
@@ -191,6 +197,7 @@ def generate_storyboard(
         EpisodeStoryboardDraft,
         method="function_calling",
         include_raw=True,
+        max_tokens=STORYBOARD_MAX_TOKENS,
     )
     result = structured_model.invoke(messages)
 
