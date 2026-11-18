@@ -2,8 +2,12 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.cli import build_parser
+from agent.episode_agent import build_episode_agent
+from agent.episode_tools import EpisodeToolContext
 from agent.model_client import create_model_client
 from agent.snapshot_schema import EpisodeSnapshotPayload
 from agent.storage import (
@@ -71,27 +75,29 @@ def run_show(
     print_episode_payload(snapshot.payload)
 
 
+def create_configured_model() -> BaseChatModel:
+    """读取 .env、校验 DeepSeek 配置并创建模型客户端。"""
+    load_dotenv(PROJECT_DIR / ".env")
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise ValueError("DEEPSEEK_API_KEY 环境变量未设置")
+
+    model_name = os.getenv("DEEPSEEK_MODEL")
+    if not model_name:
+        raise ValueError("DEEPSEEK_MODEL 环境变量未设置")
+
+    api_url = os.getenv("DEEPSEEK_API_URL")
+    if not api_url:
+        raise ValueError("DEEPSEEK_API_URL 环境变量未设置")
+
+    return create_model_client(api_key, api_url, model_name)
+
+
 def run_generate(db_path: Path, episode_id: str, requirement: str) -> None:
     """生成一集内容并保存为新版本。"""
     # 读取配置，再将配置交给模型接入层
-    load_dotenv(PROJECT_DIR / ".env")
-
-    if not os.getenv("DEEPSEEK_API_KEY"):
-        raise ValueError("DEEPSEEK_API_KEY 环境变量未设置")
-    else:
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-
-    if not os.getenv("DEEPSEEK_MODEL"):
-        raise ValueError("DEEPSEEK_MODEL 环境变量未设置")
-    else:
-        model_name = os.getenv("DEEPSEEK_MODEL")
-
-    if not os.getenv("DEEPSEEK_API_URL"):
-        raise ValueError("DEEPSEEK_API_URL 环境变量未设置")
-    else:
-        api_url = os.getenv("DEEPSEEK_API_URL")
-
-    client = create_model_client(api_key, api_url, model_name)
+    client = create_configured_model()
 
     # 执行工作流前准备好存储位置
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,8 +124,30 @@ def run_generate(db_path: Path, episode_id: str, requirement: str) -> None:
     print_episode_payload(payload)
 
 
+def run_ask(db_path: Path, question: str) -> None:
+    """把自然语言问题交给 Agent，打印最终回答。"""
+    model = create_configured_model()
+    agent = build_episode_agent(model)
+
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=question)]},
+        context=EpisodeToolContext(db_path=db_path),
+    )
+
+    messages = result["messages"]
+    final_message = messages[-1] if messages else None
+    if (
+        not isinstance(final_message, AIMessage)
+        or final_message.tool_calls
+        or not final_message.text.strip()
+    ):
+        raise RuntimeError("Agent 没有产生有效的最终回答。")
+
+    print(final_message.text)
+
+
 def main() -> None:
-    """解析命令行参数，分发到生成或查看命令。"""
+    """解析命令行参数，分发到生成、查看或问答命令。"""
     parser = build_parser(DEFAULT_DB_PATH)
     args = parser.parse_args()
 
@@ -127,6 +155,8 @@ def main() -> None:
         run_generate(args.db_path, args.episode_id, args.requirement)
     elif args.command == "show":
         run_show(args.db_path, args.episode_id, args.revision)
+    elif args.command == "ask":
+        run_ask(args.db_path, args.question)
 
 
 if __name__ == "__main__":

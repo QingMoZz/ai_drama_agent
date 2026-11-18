@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def build_parser(default_db_path: Path) -> argparse.ArgumentParser:
-    """构建命令行解析器，定义 ``generate`` 与 ``show`` 两个子命令。
+    """构建命令行解析器，定义 ``generate``、``show`` 与 ``ask`` 三个子命令。
 
     解析结果中的 ``command`` 保存子命令名称；``--episode-id`` 对应
     ``episode_id``，``--revision`` 省略时为 ``None``，表示最新版本。
@@ -59,6 +59,23 @@ def build_parser(default_db_path: Path) -> argparse.ArgumentParser:
         help="指定历史版本号（大于等于 1）；省略时表示最新版本",
     )
     show_parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=default_db_path,
+        help="SQLite 数据库文件路径；省略时使用项目默认数据库",
+    )
+
+    ask_parser = subparsers.add_parser(
+        "ask",
+        help="用自然语言查询已保存的剧集",
+        description="把问题交给 Agent，由它调用查询工具后作答；集 ID 与版本号写在问题里。",
+    )
+    ask_parser.add_argument(
+        "--question",
+        required=True,
+        help="自然语言问题，例如「比较 cli-check-001 第 1 版和第 2 版的镜头数」",
+    )
+    ask_parser.add_argument(
         "--db-path",
         type=Path,
         default=default_db_path,
