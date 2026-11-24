@@ -1,9 +1,11 @@
 """工具层：向模型暴露已保存剧集的查询能力。"""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from langchain.tools import ToolRuntime, tool
+from langchain_core.vectorstores import InMemoryVectorStore
 from pydantic import BaseModel, Field
 
 from agent.storage import load_episode_snapshot
@@ -14,6 +16,7 @@ class EpisodeToolContext:
     """工具运行上下文：承载运行配置，数据库访问发生在工具执行时。"""
 
     db_path: Path
+    knowledge_index_provider: Callable[[], InMemoryVectorStore] | None = None
 
 
 class EpisodeSummaryInput(BaseModel):

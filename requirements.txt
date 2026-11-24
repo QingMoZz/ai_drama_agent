@@ -1,5 +1,7 @@
 langchain
 langgraph
 langchain-deepseek
+langchain-huggingface[full]
+langchain-text-splitters
 pydantic>=2,<3
 python-dotenv>=1,<2

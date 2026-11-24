@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from agent.cli import build_parser
 from agent.episode_agent import build_episode_agent
 from agent.episode_tools import EpisodeToolContext
+from agent.knowledge_index import create_knowledge_index_provider
 from agent.model_client import create_model_client
 from agent.snapshot_schema import EpisodeSnapshotPayload
 from agent.storage import (
@@ -103,8 +104,12 @@ def run_generate(db_path: Path, episode_id: str, requirement: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path)
 
-    # 构建工作流，把客户端绑定进图；正常完成时梗概、编剧与分镜节点各调用一次模型
-    workflow = build_workflow(client)
+    # 构建工作流，把客户端与索引提供器绑定进图；检索节点负责首次建库，
+    # 正常完成时梗概、编剧与分镜节点各调用一次模型
+    knowledge_index_provider = create_knowledge_index_provider(
+        PROJECT_DIR / "knowledge_base"
+    )
+    workflow = build_workflow(client, knowledge_index_provider)
 
     initial_state: WorkflowState = {"requirement": requirement}
     result = workflow.invoke(initial_state)
@@ -128,10 +133,16 @@ def run_ask(db_path: Path, question: str) -> None:
     """把自然语言问题交给 Agent，打印最终回答。"""
     model = create_configured_model()
     agent = build_episode_agent(model)
+    knowledge_index_provider = create_knowledge_index_provider(
+        PROJECT_DIR / "knowledge_base"
+    )
 
     result = agent.invoke(
         {"messages": [HumanMessage(content=question)]},
-        context=EpisodeToolContext(db_path=db_path),
+        context=EpisodeToolContext(
+            db_path=db_path,
+            knowledge_index_provider=knowledge_index_provider,
+        ),
     )
 
     messages = result["messages"]
